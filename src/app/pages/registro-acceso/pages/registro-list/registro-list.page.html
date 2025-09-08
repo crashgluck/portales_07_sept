@@ -1,0 +1,68 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Registros de Acceso</ion-title>
+    <img slot="end" src="../../../assets/animations/logo/Logo-La-Foresta.webp" alt="" style="width: 50px;margin: 10px;">  
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content color="mytheme-contrast" class="mi-card">
+  <div class="lottie-wrapper">
+    <lottie-player 
+      class="lottie-player" 
+      src="../../../../../assets/animations/register.json"
+      background="transparent"
+      speed="1"
+      loop autoplay>
+    </lottie-player>
+  </div>
+
+  <ion-refresher slot="fixed" (ionRefresh)="refrescar($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <ion-label color="dark" class="ion-padding ion-margin">
+    Búsqueda por RUT, patente, motivo o empresa
+  </ion-label>
+  <ion-searchbar
+    [(ngModel)]="searchTerm"
+    (ionInput)="filtrarRegistros()"
+    placeholder="Buscar...">
+  </ion-searchbar>
+
+  <ion-card *ngFor="let reg of registrosFiltrados">
+    <ion-card-header>
+      <ion-card-title>Parcela: {{ parcelasMap[reg.parcela] || reg.parcela }}</ion-card-title>
+      <ion-card-subtitle>Motivo: <strong>{{ reg.motivo }}</strong></ion-card-subtitle>
+    </ion-card-header>
+    <ion-card-content class="ion-padding ion-margin">
+      <p><strong>Rut:</strong> {{ reg.RUT }}</p>
+      <p><strong>Fecha:</strong> {{ reg.fecha_hora | date: 'medium' }}</p>
+      <p *ngIf="reg.nombre_empresa"><strong>Empresa:</strong> {{ reg.nombre_empresa }}</p>
+      <p><strong>Patente:</strong> {{ reg.patente }}</p>
+      <p *ngIf="reg.nota"><strong>Nota:</strong> {{ reg.nota }}</p>
+    </ion-card-content>
+  </ion-card>
+
+  <ng-container *ngIf="registrosFiltrados.length === 0 && !cargando">
+    <ion-text color="medium" class="ion-padding">
+      No hay registros para mostrar.
+    </ion-text>
+  </ng-container>
+
+  <ion-spinner *ngIf="cargando" name="crescent" class="ion-text-center"></ion-spinner>
+</ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="paginaAnterior()" [disabled]="currentPage === 1">Anterior</ion-button>
+    </ion-buttons>
+    <ion-title class="ion-text-center">Página {{ currentPage }} / {{ totalPages }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="siguientePagina()" [disabled]="currentPage === totalPages">Siguiente</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-footer>

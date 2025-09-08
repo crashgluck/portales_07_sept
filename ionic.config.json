@@ -1,0 +1,7 @@
+{
+  "name": "control-portales",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular-standalone"
+}

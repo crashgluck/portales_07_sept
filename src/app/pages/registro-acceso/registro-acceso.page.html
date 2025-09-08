@@ -1,0 +1,146 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Registro Acceso</ion-title>
+    <img slot="end" src="../../../assets/animations/logo/Logo-La-Foresta.webp" alt="" style="width: 50px;margin: 10px;">    
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding center-content" color="mytheme-contrast">
+  <div class="ion-padding ion-margin center-content logo">
+    <img src="../../../assets/animations/logo/Logo-La-Foresta.webp">
+  </div>
+  
+  <ion-card class="mi-card">
+  <ion-card-header>
+    <ion-card-title>Registro de Acceso</ion-card-title>
+  </ion-card-header>
+
+  <ion-card-content>
+    <form [formGroup]="form" (ngSubmit)="enviar()">
+      <ion-item>
+        <ion-input 
+          label="RUT (SIN PUNTOS , CON GUION)" 
+          label-placement="stacked"
+          placeholder="Ej: 11222333-1" 
+          formControlName="RUT">
+        </ion-input>
+      </ion-item>
+      <ion-note color="danger" *ngIf="form.get('RUT')?.invalid && form.get('RUT')?.touched">
+        El RUT es requerido.
+      </ion-note>
+
+      <ion-item>
+      <ion-label>Parcela (SELECCIONE)</ion-label>
+      <ion-select formControlName="parcela">
+        <ion-select-option *ngFor="let p of parcelas" [value]="p.id">
+        {{ p.lote }} - {{ p.n_lote }} ({{ p.first_name }})
+        </ion-select-option>
+      </ion-select>
+    </ion-item>
+
+
+      <ion-item>
+        <ion-input 
+          label="Patente (SIN PUNTOS NI GUION)"
+          label-placement="stacked" 
+          placeholder="Ej: AB1234" 
+          formControlName="patente">
+        </ion-input>
+      </ion-item>
+
+      <ion-item>
+        <ion-select label="Motivo" label-placement="stacked"  formControlName="motivo" interface="popover" placeholder="Seleccione un motivo">
+          <ng-container *ngFor="let grupo of motivosAgrupados">
+            <ion-select-option disabled class="grupo-label">{{ grupo.categoria }}</ion-select-option>
+            <ion-select-option *ngFor="let item of grupo.opciones" [value]="item.valor">
+              {{ item.texto }}
+            </ion-select-option>
+          </ng-container>
+        </ion-select>
+      </ion-item>
+
+      <!-- Aparece solo si se selecciona 'empresa' o 'servicio' -->
+<ion-item *ngIf="mostrarEmpresa">
+  <ion-input 
+    label="Nombre de Empresa" 
+    label-placement="stacked" 
+    placeholder="Ej: Aguas y Servicios LAZ"
+    formControlName="nombre_empresa">
+  </ion-input>
+</ion-item>
+<ion-note color="danger" *ngIf="mostrarEmpresa && form.get('nombre_empresa')?.invalid && form.get('nombre_empresa')?.touched">
+  El nombre de la empresa es requerido.
+</ion-note>
+
+<ion-item *ngIf="form.get('motivo')?.value !== 'PROPIETARIO'">
+  <ion-input label="Número Tarjetón" label-placement="stacked" type="number" formControlName="numero_tarjeton"></ion-input>
+</ion-item>
+
+<ion-item *ngIf="form.get('motivo')?.value !== 'PROPIETARIO'">
+  <ion-select label="Color Tarjetón" label-placement="stacked" formControlName="color_tarjeton" placeholder="Seleccione un color">
+    <ion-select-option value="verde">Verde</ion-select-option>
+    <ion-select-option value="rojo">Rojo</ion-select-option>
+    <ion-select-option value="amarillo">Amarillo</ion-select-option>
+    <ion-select-option value="azul">Azul</ion-select-option>
+  </ion-select>
+</ion-item><br>
+
+
+<ion-label class="ion-padding ion-margin">Fecha y Hora (AUTOMÁTICA, SOLO MODIFICAR DE SER NECESARIO)</ion-label>
+<ion-item>
+  
+  <ion-datetime presentation="date-time" formControlName="fecha_hora"></ion-datetime></ion-item>
+    <ion-item><ion-textarea label="Nota" label-placement="stacked" placeholder="(Opcional)" formControlName="nota"></ion-textarea></ion-item>
+
+
+      <ion-item>
+  
+
+</ion-item>
+
+
+
+    
+
+      <ion-button expand="full" type="submit" [disabled]="form.invalid" class="ion-margin-top">
+        Registrar Acceso
+      </ion-button>
+    </form>
+  </ion-card-content>
+</ion-card>
+
+  <br>
+
+  <!--
+  <ion-list class="ion-padding ion-margin">
+
+    <div style="height: 10rem;">
+      
+      <lottie-player class="lottie-player" 
+      src="../../../assets/animations/Book.json"
+      background="transparent"
+      speed="1"
+      time="1"
+      loop autoplay
+      >
+    </lottie-player>
+  </div>
+    <h1 class="ion-padding">Lista de Registros</h1>
+    <ion-item *ngFor="let r of registros">
+      <ion-label>
+        <h2>Motivo: {{ r.motivo }}</h2>
+        <strong>Rut: {{ r.RUT }}</strong><br>
+        <strong>Fecha: {{ r.fecha_hora | date: 'short' }}</strong>
+        <p>Patente: {{ r.patente }}</p>
+       
+      </ion-label>
+      <ion-label></ion-label>
+      <ion-button  color="warning" (click)="editar(r)">Editar</ion-button>
+      <ion-button  color="danger" (click)="eliminar(r.id!)">Eliminar</ion-button>
+    </ion-item>
+  </ion-list>
+  -->
+</ion-content>
