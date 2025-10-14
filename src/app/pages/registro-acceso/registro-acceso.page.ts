@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormControl } 
 import { RegistroAccesoService, RegistroAcceso } from '../../services/registrar-acceso.service';
 import { UsuarioNuevoService, UsuarioNuevo } from '../../services/usuario-nuevo.service';
 import { CommonModule } from '@angular/common';
-import { IonicModule, ToastController } from '@ionic/angular';
+import { IonicModule, ToastController, LoadingController } from '@ionic/angular';
 import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 
 @Component({
@@ -24,7 +24,6 @@ export class RegistroAccesoPage implements OnInit {
   editando = false;
   idEditar: number | null = null;
 
-  // <-- MOTIVOS AGRUPADOS DEBEN ESTAR AQUÍ
   motivosAgrupados = [
     {
       categoria: 'Visitas',
@@ -55,7 +54,8 @@ export class RegistroAccesoPage implements OnInit {
     private fb: FormBuilder,
     private registroService: RegistroAccesoService,
     private usuarioNuevoService: UsuarioNuevoService,
-    private toastCtrl: ToastController
+    private toastCtrl: ToastController,
+    private loadingCtrl: LoadingController // 👈 agregado
   ) {
     const ahora = new Date();
     const isoLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString();
@@ -79,12 +79,8 @@ export class RegistroAccesoPage implements OnInit {
     this.cargarRegistros();
     this.cargarParcelas();
 
-    // Filtrado de parcelas por búsqueda
-    this.busquedaControl.valueChanges.subscribe(texto => {
-      this.filtrarParcelas(texto);
-    });
+    this.busquedaControl.valueChanges.subscribe(texto => this.filtrarParcelas(texto));
 
-    // Mostrar u ocultar campo de empresa según motivo
     this.form.get('motivo')?.valueChanges.subscribe(valor => {
       if (valor === 'EMPRESA' || valor === 'SERVICIO') {
         this.mostrarEmpresa = true;
@@ -101,7 +97,7 @@ export class RegistroAccesoPage implements OnInit {
     const toast = await this.toastCtrl.create({
       message: mensaje,
       duration: 2000,
-      color: color,
+      color,
       position: 'top'
     });
     toast.present();
@@ -151,40 +147,37 @@ export class RegistroAccesoPage implements OnInit {
     }
   }
 
-  enviar() {
+  async enviar() {
+    const loading = await this.loadingCtrl.create({
+      message: 'Guardando registro...',
+      spinner: 'circles'
+    });
+    await loading.present();
+
     const data = { ...this.form.value };
 
-    // Si motivo es PROPIETARIO, tarjetón no aplica
     if (data.motivo === 'PROPIETARIO') {
       data.numero_tarjeton = null;
       data.color_tarjeton = null;
     }
 
-    if (this.editando && this.idEditar !== null) {
-      this.registroService.updateRegistro(this.idEditar, data).subscribe({
-        next: () => {
-          this.cargarRegistros();
-          this.resetFormulario();
-          this.mostrarToast('Registro actualizado correctamente');
-        },
-        error: err => {
-          console.error(err);
-          this.mostrarToast('Error al actualizar', 'danger');
-        }
-      });
-    } else {
-      this.registroService.createRegistro(data).subscribe({
-        next: () => {
-          this.cargarRegistros();
-          this.resetFormulario();
-          this.mostrarToast('Registro creado correctamente');
-        },
-        error: err => {
-          console.error(err);
-          this.mostrarToast('Error al crear registro', 'danger');
-        }
-      });
-    }
+    const obs = this.editando && this.idEditar !== null
+      ? this.registroService.updateRegistro(this.idEditar, data)
+      : this.registroService.createRegistro(data);
+
+    obs.subscribe({
+      next: async () => {
+        await loading.dismiss();
+        this.cargarRegistros();
+        this.resetFormulario();
+        this.mostrarToast(this.editando ? 'Registro actualizado correctamente' : 'Registro creado correctamente');
+      },
+      error: async err => {
+        console.error(err);
+        await loading.dismiss();
+        this.mostrarToast('Error al guardar el registro', 'danger');
+      }
+    });
   }
 
   resetFormulario() {

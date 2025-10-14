@@ -1,6 +1,6 @@
 import { Component, OnInit, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
-import { IonicModule, NavController, ToastController } from '@ionic/angular';
+import { IonicModule, NavController, ToastController, LoadingController } from '@ionic/angular';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
 import { AnimationController } from '@ionic/angular';
@@ -24,10 +24,17 @@ export class LoginPage implements OnInit {
     private authService: AuthService,
     private toastController: ToastController,
     private navCtrl: NavController,
-    private animationCtrl: AnimationController
+    private animationCtrl: AnimationController,
+    private loadingCtrl: LoadingController // 👈 agregado
   ) {}
 
   ngOnInit() {
+    const token = this.authService.getToken();
+    if (token) {
+      this.navCtrl.navigateRoot('/registro-acceso');
+      return;
+    }
+
     this.playAnimation();
   }
 
@@ -50,17 +57,16 @@ export class LoginPage implements OnInit {
   }
 
   async showToast(message: string, color: string = 'dark') {
-  const toast = await this.toastController.create({
-    message,
-    duration: 3000,
-    color,
-    position: 'bottom'
-  });
-  toast.present();
-}
+    const toast = await this.toastController.create({
+      message,
+      duration: 3000,
+      color,
+      position: 'bottom'
+    });
+    toast.present();
+  }
 
-
-  onSubmit() {
+  async onSubmit() {
     if (this.form.invalid) {
       this.showToast('Formulario inválido. Revisa los campos.', 'warning');
       return;
@@ -73,12 +79,21 @@ export class LoginPage implements OnInit {
       return;
     }
 
+    // ⏳ Mostrar spinner mientras se inicia sesión
+    const loading = await this.loadingCtrl.create({
+      message: 'Iniciando sesión...',
+      spinner: 'crescent',
+    });
+    await loading.present();
+
     this.authService.login(username, password).subscribe({
-      next: () => {
+      next: async () => {
+        await loading.dismiss();
         this.showToast('Inicio de sesión exitoso', 'success');
         this.navCtrl.navigateRoot('/registro-acceso');
       },
-      error: (error) => {
+      error: async (error) => {
+        await loading.dismiss();
         if (!navigator.onLine || error.status === 0) {
           this.showToast('No se pudo conectar al servidor', 'danger');
         } else if (error.status === 400 || error.status === 401) {
