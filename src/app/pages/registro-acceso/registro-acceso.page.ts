@@ -1,13 +1,10 @@
 import { Component, OnInit, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { RegistroAccesoService, RegistroAcceso } from '../../services/registrar-acceso.service';
-import { UsuarioNuevoService, UsuarioNuevo } from '../../services/usuario-nuevo.service'; // NUEVO servicio
+import { UsuarioNuevoService, UsuarioNuevo } from '../../services/usuario-nuevo.service';
 import { CommonModule } from '@angular/common';
-import { IonicModule } from '@ionic/angular';
-import { AnimationController } from '@ionic/angular';
-import { ToastController } from '@ionic/angular';
+import { IonicModule, ToastController } from '@ionic/angular';
 import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
-
 
 @Component({
   selector: 'app-registro-acceso',
@@ -18,83 +15,78 @@ import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 })
 export class RegistroAccesoPage implements OnInit {
   registros: RegistroAcceso[] = [];
-  registrosFiltrados: RegistroAcceso[] = []; // ✅ agregar
-  parcelas: UsuarioNuevo[] = [];  // lista de parcelas desde el backend
+  registrosFiltrados: RegistroAcceso[] = [];
+  parcelas: UsuarioNuevo[] = [];
+  parcelasFiltradas: UsuarioNuevo[] = [];
   form: FormGroup;
+  busquedaControl: FormControl;
   mostrarEmpresa: boolean = false;
   editando = false;
   idEditar: number | null = null;
-  
-  currentPage = 1;
-  totalPages = 1;
 
-  cargando = false;
+  // <-- MOTIVOS AGRUPADOS DEBEN ESTAR AQUÍ
   motivosAgrupados = [
-  {
-    categoria: 'Visitas',
-    opciones: [
-      { valor: 'PROPIETARIO', texto: 'Propietario' },
-      { valor: 'VISITA', texto: 'Visita' },
-    ]
-  },
-  {
-    categoria: 'Servicios',
-    opciones: [
-      { valor: 'EMPRESA', texto: 'Empresa' },
-      { valor: 'SERVICIO', texto: 'Servicio' },
-    ]
-  },
-  {
-    categoria: 'Emergencias',
-    opciones: [
-      { valor: 'CARABINEROS', texto: 'Carabineros' },
-      { valor: 'BOMBEROS', texto: 'Bomberos' },
-      { valor: 'AMBULANCIA', texto: 'Ambulancia' },
-      { valor: 'PDI', texto: 'PDI' },
-    ]
-  }
-];
-
+    {
+      categoria: 'Visitas',
+      opciones: [
+        { valor: 'PROPIETARIO', texto: 'Propietario' },
+        { valor: 'VISITA', texto: 'Visita' }
+      ]
+    },
+    {
+      categoria: 'Servicios',
+      opciones: [
+        { valor: 'EMPRESA', texto: 'Empresa' },
+        { valor: 'SERVICIO', texto: 'Servicio' }
+      ]
+    },
+    {
+      categoria: 'Emergencias',
+      opciones: [
+        { valor: 'CARABINEROS', texto: 'Carabineros' },
+        { valor: 'BOMBEROS', texto: 'Bomberos' },
+        { valor: 'AMBULANCIA', texto: 'Ambulancia' },
+        { valor: 'PDI', texto: 'PDI' }
+      ]
+    }
+  ];
 
   constructor(
     private fb: FormBuilder,
     private registroService: RegistroAccesoService,
-    private usuarioNuevoService: UsuarioNuevoService, // servicio para traer parcelas
-    private animationCtrl: AnimationController,
-    private toastCtrl: ToastController // ✅
+    private usuarioNuevoService: UsuarioNuevoService,
+    private toastCtrl: ToastController
   ) {
     const ahora = new Date();
     const isoLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString();
 
     this.form = this.fb.group({
-      RUT: ['', [Validators.required, rutValidator()]], // ✅ RUT validado
-      parcela: ['', Validators.required],  // ✅ reemplaza lote y numero_lote
+      RUT: ['', [Validators.required, rutValidator()]],
+      parcela: ['', Validators.required],
       patente: ['', Validators.required],
       motivo: ['', Validators.required],
       nombre_empresa: [''],
       fecha_hora: [isoLocal, Validators.required],
       nota: [''],
-      numero_tarjeton: [''], // inicializado como string
-      color_tarjeton: [''], 
+      numero_tarjeton: [''],
+      color_tarjeton: ['']
     });
+
+    this.busquedaControl = this.fb.control('');
   }
 
   ngOnInit() {
     this.cargarRegistros();
-    this.cargarParcelas(); // ✅ cargar parcelas al inicio
-/*
-    const animation = this.animationCtrl
-      .create()
-      .addElement(document.querySelector('.mi-card')!)
-      .addElement(document.querySelector('.logo')!)
-      .duration(800)
-      .fromTo('opacity', '0', '1')
-      .fromTo('transform', 'translateY(20px)', 'translateY(0px)')
-      .play();
-      */
+    this.cargarParcelas();
 
+    // Filtrado de parcelas por búsqueda
+    this.busquedaControl.valueChanges.subscribe(texto => {
+      this.filtrarParcelas(texto);
+    });
+
+    // Mostrar u ocultar campo de empresa según motivo
     this.form.get('motivo')?.valueChanges.subscribe(valor => {
-      if (valor === 'empresa' || valor === 'servicio') {
+      if (valor === 'EMPRESA' || valor === 'SERVICIO') {
         this.mostrarEmpresa = true;
         this.form.get('nombre_empresa')?.setValidators(Validators.required);
       } else {
@@ -106,111 +98,113 @@ export class RegistroAccesoPage implements OnInit {
   }
 
   async mostrarToast(mensaje: string, color: 'success' | 'danger' = 'success') {
-  const toast = await this.toastCtrl.create({
-    message: mensaje,
-    duration: 2000,
-    color: color,
-    position: 'top'
-  });
-  toast.present();
-}
-
-
-
-  cargarRegistros(page: number = 1) {
-  this.cargando = true;
-  this.registroService.getRegistros(page).subscribe({
-    next: (data) => {
-      // data es PaginatedResponse<RegistroAcceso>
-      this.registros = data.results;          // ✅ solo los registros
-      this.registrosFiltrados = data.results; // ✅ para búsqueda/filtrado
-      this.totalPages = Math.ceil(data.count / 10);
-      this.currentPage = page;
-      this.cargando = false;
-    },
-    error: (err) => {
-      console.error(err);
-      this.cargando = false;
-    }
-  });
-}
-
-
-
-siguientePagina() {
-  if (this.currentPage < this.totalPages) {
-    this.cargarRegistros(this.currentPage + 1);
+    const toast = await this.toastCtrl.create({
+      message: mensaje,
+      duration: 2000,
+      color: color,
+      position: 'top'
+    });
+    toast.present();
   }
-}
 
-paginaAnterior() {
-  if (this.currentPage > 1) {
-    this.cargarRegistros(this.currentPage - 1);
+  cargarRegistros() {
+    this.registroService.getRegistros().subscribe({
+      next: data => {
+        this.registros = data.results;
+        this.registrosFiltrados = data.results;
+      },
+      error: err => console.error(err)
+    });
   }
-}
 
   cargarParcelas() {
     this.usuarioNuevoService.getParcelas().subscribe(data => {
       this.parcelas = data;
-      console.log(this.parcelas)
     });
+  }
+
+  filtrarParcelas(texto: string) {
+    if (!texto) {
+      this.parcelasFiltradas = [];
+      return;
+    }
+    const t = texto.toLowerCase();
+    this.parcelasFiltradas = this.parcelas.filter(p => {
+      const parcelaCompleta = `${p.lote}-${p.n_lote}`.toLowerCase();
+      return parcelaCompleta.includes(t) || p.first_name.toLowerCase().includes(t);
+    });
+  }
+
+  seleccionarParcela(p: UsuarioNuevo) {
+    this.form.get('parcela')?.setValue(p.id);
+    this.busquedaControl.setValue(`${p.lote}-${p.n_lote} (${p.first_name})`, { emitEvent: false });
+    this.parcelasFiltradas = [];
+  }
+
+  formatearRut() {
+    let rut = this.form.get('RUT')?.value || '';
+    rut = rut.replace(/[^0-9kK]/g, '');
+    if (rut.length > 1) {
+      const cuerpo = rut.slice(0, -1);
+      const dv = rut.slice(-1);
+      this.form.get('RUT')?.setValue(`${cuerpo}-${dv.toUpperCase()}`);
+    }
   }
 
   enviar() {
-  const data = this.form.value;
-  // Asegurarse de que tarjetón sea null si motivo es PROPIETARIO
-  if (data.motivo === 'PROPIETARIO') {
-    data.numero_tarjeton = null;
-    data.color_tarjeton = null;
+    const data = { ...this.form.value };
+
+    // Si motivo es PROPIETARIO, tarjetón no aplica
+    if (data.motivo === 'PROPIETARIO') {
+      data.numero_tarjeton = null;
+      data.color_tarjeton = null;
+    }
+
+    if (this.editando && this.idEditar !== null) {
+      this.registroService.updateRegistro(this.idEditar, data).subscribe({
+        next: () => {
+          this.cargarRegistros();
+          this.resetFormulario();
+          this.mostrarToast('Registro actualizado correctamente');
+        },
+        error: err => {
+          console.error(err);
+          this.mostrarToast('Error al actualizar', 'danger');
+        }
+      });
+    } else {
+      this.registroService.createRegistro(data).subscribe({
+        next: () => {
+          this.cargarRegistros();
+          this.resetFormulario();
+          this.mostrarToast('Registro creado correctamente');
+        },
+        error: err => {
+          console.error(err);
+          this.mostrarToast('Error al crear registro', 'danger');
+        }
+      });
+    }
   }
 
-  if (this.editando && this.idEditar !== null) {
-    this.registroService.updateRegistro(this.idEditar, data).subscribe({
-      next: () => {
-        this.cargarRegistros();
-        this.resetFormulario(); // ✅ reset con fecha nueva
-        this.mostrarToast('Registro actualizado correctamente', 'success');
-      },
-      error: (err) => {
-        console.error(err);
-        this.mostrarToast('Error al actualizar. Verifica tu conexión.', 'danger');
-      }
+  resetFormulario() {
+    const ahora = new Date();
+    const isoLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString();
+    this.form.reset({
+      fecha_hora: isoLocal,
+      RUT: '',
+      parcela: '',
+      patente: '',
+      motivo: '',
+      nombre_empresa: '',
+      nota: '',
+      numero_tarjeton: '',
+      color_tarjeton: ''
     });
-  } else {
-    this.registroService.createRegistro(data).subscribe({
-      next: () => {
-        this.cargarRegistros();
-        this.resetFormulario(); // ✅ reset con fecha nueva
-        this.mostrarToast('Registro creado correctamente', 'success');
-      },
-      error: (err) => {
-        console.error(err);
-        this.mostrarToast('Error al crear registro. Verifica tu conexión.', 'danger');
-      }
-    });
+    this.editando = false;
+    this.idEditar = null;
+    this.busquedaControl.setValue('');
   }
-}
-
-// función para resetear formulario
-resetFormulario() {
-  const ahora = new Date();
-  const isoLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString();
-  
-  this.form.reset({
-    fecha_hora: isoLocal,  // ✅ valor por defecto actualizado
-    RUT: '',
-    parcela: '',
-    patente: '',
-    motivo: '',
-    nombre_empresa: '',
-    nota: '',
-    numero_tarjeton: '',
-    color_tarjeton: ''
-  });
-  this.editando = false;
-  this.idEditar = null;
-}
-
 
   editar(registro: RegistroAcceso) {
     this.form.patchValue(registro);
@@ -223,18 +217,11 @@ resetFormulario() {
       this.cargarRegistros();
     });
   }
-
-  cancelar() {
-    this.form.reset();
-    this.editando = false;
-    this.idEditar = null;
-  }
 }
 
 export function rutValidator(): ValidatorFn {
   return (control: AbstractControl): ValidationErrors | null => {
     const rut = control.value;
-    // Formato 12345678-9 o 12.345.678-9
     const rutRegex = /^\d{7,8}-[\dkK]$/;
     return rutRegex.test(rut) ? null : { rutInvalido: true };
   };

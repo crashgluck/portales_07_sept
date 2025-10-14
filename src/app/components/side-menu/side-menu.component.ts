@@ -3,6 +3,15 @@ import { RouterModule } from '@angular/router';
 import { IonicModule } from '@ionic/angular';
 import { AuthService } from 'src/app/services/auth.service';
 import { Router } from '@angular/router';
+import { addIcons } from 'ionicons';
+import { listOutline, logInOutline, logOutOutline } from 'ionicons/icons';
+
+addIcons({
+  'list-outline': listOutline,
+  'log-in-outline': logInOutline,
+  'log-out-outline': logOutOutline
+});
+
 
 @Component({
   selector: 'app-side-menu',

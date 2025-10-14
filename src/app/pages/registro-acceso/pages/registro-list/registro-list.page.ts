@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
   imports: [
     CommonModule,
     IonicModule,
-    FormsModule
+    FormsModule,
   ],
   templateUrl: './registro-list.page.html',
   styleUrls: ['./registro-list.page.scss'],
@@ -48,15 +48,20 @@ export class RegistroListPage implements OnInit {
       .play();
   }
 
-  cargarParcelas() {
-    this.usuarioNuevoService.getParcelas().subscribe(data => {
-      this.parcelas = data;
-      this.parcelasMap = {};
-      data.forEach(p => {
-        this.parcelasMap[p.id] = `${p.lote}-${p.n_lote}`;
-      });
-    });
+  ionViewWillEnter() {
+    this.cargarRegistros(); // se llama cada vez que la página aparece
   }
+
+  cargarParcelas() {
+  this.usuarioNuevoService.getParcelas().subscribe(data => {
+    this.parcelas = data;
+    this.parcelasMap = {};
+    data.forEach(p => {
+      this.parcelasMap[p.id] = `${p.lote} - ${p.n_lote}`; // <-- con espacio alrededor de -
+    });
+  });
+}
+
 
   cargarRegistros(page: number = 1) {
     this.cargando = true;
@@ -88,9 +93,35 @@ export class RegistroListPage implements OnInit {
   }
 
   filtrarRegistros() {
-    // Cada vez que se cambia el término de búsqueda, reinicia la página
-    this.cargarRegistros(1);
+  const term = this.searchTerm.toLowerCase().trim().replace(/\s*-\s*/, '-'); 
+  // Normaliza term: quita espacios antes y después del guion
+
+  if (!term) {
+    this.registrosFiltrados = this.registros;
+    return;
   }
+
+  this.registrosFiltrados = this.registros.filter(reg => {
+    // Normaliza el texto de la parcela de la misma forma
+    const parcelaTexto = (this.parcelasMap[reg.parcela] || '').toLowerCase().replace(/\s*-\s*/, '-');
+    const rut = reg.RUT?.toLowerCase() || '';
+    const patente = reg.patente?.toLowerCase() || '';
+    const motivo = reg.motivo?.toLowerCase() || '';
+    const empresa = reg.nombre_empresa?.toLowerCase() || '';
+
+    return (
+      parcelaTexto.includes(term) ||
+      rut.includes(term) ||
+      patente.includes(term) ||
+      motivo.includes(term) ||
+      empresa.includes(term)
+    );
+  });
+
+  this.currentPage = 1; // Reinicia la paginación al filtrar
+}
+
+
 
   refrescar(event: any) {
     this.cargarRegistros(this.currentPage);
