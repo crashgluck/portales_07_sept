@@ -1,10 +1,11 @@
-import { Component, OnInit, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { Component, OnInit, OnDestroy, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { RegistroAccesoService, RegistroAcceso } from '../../services/registrar-acceso.service';
 import { UsuarioNuevoService, UsuarioNuevo } from '../../services/usuario-nuevo.service';
 import { CommonModule } from '@angular/common';
 import { IonicModule, ToastController, LoadingController } from '@ionic/angular';
 import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
+import { Subscription, firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-registro-acceso',
@@ -13,16 +14,18 @@ import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
   templateUrl: './registro-acceso.page.html',
   schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
-export class RegistroAccesoPage implements OnInit {
+export class RegistroAccesoPage implements OnInit, OnDestroy {
   registros: RegistroAcceso[] = [];
   registrosFiltrados: RegistroAcceso[] = [];
   parcelas: UsuarioNuevo[] = [];
   parcelasFiltradas: UsuarioNuevo[] = [];
   form: FormGroup;
   busquedaControl: FormControl;
-  mostrarEmpresa: boolean = false;
+  mostrarEmpresa = false;
   editando = false;
   idEditar: number | null = null;
+
+  private subscriptions: Subscription[] = [];
 
   motivosAgrupados = [
     {
@@ -55,7 +58,7 @@ export class RegistroAccesoPage implements OnInit {
     private registroService: RegistroAccesoService,
     private usuarioNuevoService: UsuarioNuevoService,
     private toastCtrl: ToastController,
-    private loadingCtrl: LoadingController // 👈 agregado
+    private loadingCtrl: LoadingController
   ) {
     const ahora = new Date();
     const isoLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString();
@@ -75,13 +78,39 @@ export class RegistroAccesoPage implements OnInit {
     this.busquedaControl = this.fb.control('');
   }
 
+  // -------------------------
+  // Hooks
+  // -------------------------
   ngOnInit() {
-    this.cargarRegistros();
+    this.configurarFormControls();
     this.cargarParcelas();
+  }
 
-    this.busquedaControl.valueChanges.subscribe(texto => this.filtrarParcelas(texto));
+  ionViewWillEnter() {
+  // Actualiza fecha_hora cada vez que entras a la página
+  const ahora = new Date();
+  const isoLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString();
+  this.form.get('fecha_hora')?.setValue(isoLocal);
 
-    this.form.get('motivo')?.valueChanges.subscribe(valor => {
+  // Cargar registros actualizados
+  this.cargarRegistros();
+}
+
+
+  ngOnDestroy() {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+  }
+
+  // -------------------------
+  // Configuración de form controls
+  // -------------------------
+  private configurarFormControls() {
+    // Filtrar parcelas mientras se escribe
+    const sub1 = this.busquedaControl.valueChanges.subscribe(texto => this.filtrarParcelas(texto));
+    this.subscriptions.push(sub1);
+
+    // Mostrar u ocultar campo nombre_empresa según motivo
+    const sub2 = this.form.get('motivo')?.valueChanges.subscribe(valor => {
       if (valor === 'EMPRESA' || valor === 'SERVICIO') {
         this.mostrarEmpresa = true;
         this.form.get('nombre_empresa')?.setValidators(Validators.required);
@@ -91,34 +120,36 @@ export class RegistroAccesoPage implements OnInit {
       }
       this.form.get('nombre_empresa')?.updateValueAndValidity();
     });
+    if (sub2) this.subscriptions.push(sub2);
   }
 
-  async mostrarToast(mensaje: string, color: 'success' | 'danger' = 'success') {
-    const toast = await this.toastCtrl.create({
-      message: mensaje,
-      duration: 2000,
-      color,
-      position: 'top'
-    });
-    toast.present();
-  }
-
-  cargarRegistros() {
-    this.registroService.getRegistros().subscribe({
-      next: data => {
-        this.registros = data.results;
-        this.registrosFiltrados = data.results;
-      },
-      error: err => console.error(err)
-    });
-  }
-
-  cargarParcelas() {
-    this.usuarioNuevoService.getParcelas().subscribe(data => {
+  // -------------------------
+  // Métodos async para cargar datos
+  // -------------------------
+  private async cargarParcelas() {
+    try {
+      const data = await firstValueFrom(this.usuarioNuevoService.getParcelas());
       this.parcelas = data;
-    });
+    } catch (err) {
+      console.error('Error cargando parcelas:', err);
+      this.mostrarToast('Error cargando parcelas', 'danger');
+    }
   }
 
+  private async cargarRegistros() {
+    try {
+      const data = await firstValueFrom(this.registroService.getRegistros());
+      this.registros = data.results;
+      this.registrosFiltrados = data.results;
+    } catch (err) {
+      console.error('Error cargando registros:', err);
+      this.mostrarToast('Error cargando registros', 'danger');
+    }
+  }
+
+  // -------------------------
+  // Filtrado y selección
+  // -------------------------
   filtrarParcelas(texto: string) {
     if (!texto) {
       this.parcelasFiltradas = [];
@@ -137,6 +168,9 @@ export class RegistroAccesoPage implements OnInit {
     this.parcelasFiltradas = [];
   }
 
+  // -------------------------
+  // Formato y envío
+  // -------------------------
   formatearRut() {
     let rut = this.form.get('RUT')?.value || '';
     rut = rut.replace(/[^0-9kK]/g, '');
@@ -148,36 +182,31 @@ export class RegistroAccesoPage implements OnInit {
   }
 
   async enviar() {
-    const loading = await this.loadingCtrl.create({
-      message: 'Guardando registro...',
-      spinner: 'circles'
-    });
+    const loading = await this.loadingCtrl.create({ message: 'Guardando registro...', spinner: 'circles' });
     await loading.present();
 
     const data = { ...this.form.value };
-
     if (data.motivo === 'PROPIETARIO') {
       data.numero_tarjeton = null;
       data.color_tarjeton = null;
     }
 
-    const obs = this.editando && this.idEditar !== null
-      ? this.registroService.updateRegistro(this.idEditar, data)
-      : this.registroService.createRegistro(data);
-
-    obs.subscribe({
-      next: async () => {
-        await loading.dismiss();
-        this.cargarRegistros();
-        this.resetFormulario();
-        this.mostrarToast(this.editando ? 'Registro actualizado correctamente' : 'Registro creado correctamente');
-      },
-      error: async err => {
-        console.error(err);
-        await loading.dismiss();
-        this.mostrarToast('Error al guardar el registro', 'danger');
+    try {
+      if (this.editando && this.idEditar !== null) {
+        await firstValueFrom(this.registroService.updateRegistro(this.idEditar, data));
+        this.mostrarToast('Registro actualizado correctamente');
+      } else {
+        await firstValueFrom(this.registroService.createRegistro(data));
+        this.mostrarToast('Registro creado correctamente');
       }
-    });
+      this.resetFormulario();
+      this.cargarRegistros();
+    } catch (err) {
+      console.error(err);
+      this.mostrarToast('Error al guardar el registro', 'danger');
+    } finally {
+      await loading.dismiss();
+    }
   }
 
   resetFormulario() {
@@ -206,9 +235,15 @@ export class RegistroAccesoPage implements OnInit {
   }
 
   eliminar(id: number) {
-    this.registroService.deleteRegistro(id).subscribe(() => {
-      this.cargarRegistros();
-    });
+    this.registroService.deleteRegistro(id).subscribe(() => this.cargarRegistros());
+  }
+
+  // -------------------------
+  // Toast helper
+  // -------------------------
+  async mostrarToast(mensaje: string, color: 'success' | 'danger' = 'success') {
+    const toast = await this.toastCtrl.create({ message: mensaje, duration: 2000, color, position: 'top' });
+    toast.present();
   }
 }
 
